@@ -10,7 +10,7 @@
 
 **An intelligent autonomous car system that responds to hand gestures and actively tracks people using advanced computer vision**
 
-[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [Hardware](#-hardware) • [Contributing](#-contributing)
+[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Hardware](#-hardware) • [Contributing](#-contributing)
 
 </div>
 
@@ -41,24 +41,6 @@
 - **4-Motor Drive**: Precise movement control
 - **HTTP API**: RESTful communication
 - **Emergency Stop**: Safety-first design
-
----
-
-## 🎬 Demo
-
-### Hand Gesture Control
-```
-🖐️ LEFT HAND  → 🚗 FORWARD
-🖐️ RIGHT HAND → 🛑 STOP
-🖐️ BOTH HANDS → ⚠️ EMERGENCY STOP
-```
-
-### Auto-Tracking Behavior
-```
-👤 Person moves left  → 🚗 Car turns left to follow
-👤 Person moves right → 🚗 Car turns right to follow
-👤 Person centered    → 🚗 Car stops turning
-```
 
 ---
 
