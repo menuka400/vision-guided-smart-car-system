@@ -26,6 +26,11 @@
 #define HAND_BOTH_RAISED 13
 #define HAND_NONE_RAISED 14
 
+// Add new movement commands for tracking
+#define TRACK_LEFT 15
+#define TRACK_RIGHT 16
+#define TRACK_CENTER 17
+
 #define FRONT_RIGHT_MOTOR 0
 #define BACK_RIGHT_MOTOR 1
 #define FRONT_LEFT_MOTOR 2
@@ -274,6 +279,31 @@ void processCarMovement(String inputValue)
       rotateMotor(BACK_LEFT_MOTOR, STOP);
       break;
 
+    // Add these new cases in the processCarMovement switch statement
+    case TRACK_LEFT:
+      Serial.println("Tracking left - adjusting car orientation");
+      rotateMotor(FRONT_RIGHT_MOTOR, FORWARD);
+      rotateMotor(BACK_RIGHT_MOTOR, FORWARD);
+      rotateMotor(FRONT_LEFT_MOTOR, BACKWARD);
+      rotateMotor(BACK_LEFT_MOTOR, BACKWARD);
+      break;
+
+    case TRACK_RIGHT:
+      Serial.println("Tracking right - adjusting car orientation");
+      rotateMotor(FRONT_RIGHT_MOTOR, BACKWARD);
+      rotateMotor(BACK_RIGHT_MOTOR, BACKWARD);
+      rotateMotor(FRONT_LEFT_MOTOR, FORWARD);
+      rotateMotor(BACK_LEFT_MOTOR, FORWARD);
+      break;
+
+    case TRACK_CENTER:
+      Serial.println("Target centered - stopping orientation adjustment");
+      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
+      rotateMotor(BACK_RIGHT_MOTOR, STOP);
+      rotateMotor(FRONT_LEFT_MOTOR, STOP);
+      rotateMotor(BACK_LEFT_MOTOR, STOP);
+      break;
+
     case STOP:
     default:
       rotateMotor(FRONT_RIGHT_MOTOR, STOP);
@@ -310,6 +340,28 @@ void handleHandGesture(AsyncWebServerRequest *request)
     request->send(200, "text/plain", "OK");
   } else {
     request->send(400, "text/plain", "Missing gesture parameter");
+  }
+}
+
+void handlePersonTracking(AsyncWebServerRequest *request) 
+{
+  if (request->hasParam("action", true)) {
+    String action = request->getParam("action", true)->value();
+    Serial.printf("Received tracking command: %s\n", action.c_str());
+    
+    if (action == "track_left") {
+      processCarMovement("15");  // TRACK_LEFT
+    } else if (action == "track_right") {
+      processCarMovement("16");  // TRACK_RIGHT
+    } else if (action == "track_center") {
+      processCarMovement("17");  // TRACK_CENTER
+    } else {
+      processCarMovement("0");   // STOP
+    }
+    
+    request->send(200, "text/plain", "OK");
+  } else {
+    request->send(400, "text/plain", "Missing action parameter");
   }
 }
 
@@ -380,6 +432,7 @@ void setup(void)
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/hand-gesture", HTTP_POST, handleHandGesture);
+  server.on("/person-tracking", HTTP_POST, handlePersonTracking);
   server.onNotFound(handleNotFound);
 
   ws.onEvent(onWebSocketEvent);
