@@ -194,6 +194,9 @@ class PersonTracker:
         self.tracking_enabled = True
         self.frame_dimensions = (640, 480)  # Default frame size
         
+        # Add frame flipping option
+        self.flip_frame = True  # Enable horizontal flipping by default
+        
         # Setup models
         self.setup_models()
         
@@ -604,13 +607,18 @@ class PersonTracker:
         logger.info("Starting enhanced smart car tracking system...")
         logger.info("🖐️ LEFT hand = FORWARD | RIGHT hand = STOP")
         logger.info("🎯 Car will automatically adjust orientation to track person")
-        logger.info("Press 't' to toggle tracking, 's' to adjust sensitivity")
+        logger.info("🔄 Frame mirroring enabled for natural interaction")
+        logger.info("Press 't' to toggle tracking, 's' to adjust sensitivity, 'f' to toggle mirror")
         
         try:
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
+                
+                # Flip frame horizontally for mirror effect
+                if self.flip_frame:
+                    frame = cv2.flip(frame, 1)
                 
                 # Process frame with enhanced tracking
                 processed_frame, tracks, detections = self.process_frame(frame)
@@ -643,9 +651,15 @@ class PersonTracker:
                 
                 # Show enhanced control instructions
                 cv2.putText(output_frame, "LEFT=FORWARD | RIGHT=STOP | CAR AUTO-TRACKS PERSON", 
-                           (10, output_frame.shape[0] - 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                cv2.putText(output_frame, "q=quit | r=reset | t=toggle tracking | s=sensitivity", 
-                           (10, output_frame.shape[0] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                           (10, output_frame.shape[0] - 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.putText(output_frame, "q=quit | r=reset | t=toggle tracking | s=sensitivity | f=flip", 
+                           (10, output_frame.shape[0] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                # Show flip status
+                flip_status = f"🔄 MIRROR: {'ON' if self.flip_frame else 'OFF'}"
+                flip_color = (0, 255, 0) if self.flip_frame else (0, 0, 255)
+                cv2.putText(output_frame, flip_status, (10, output_frame.shape[0] - 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, flip_color, 2)
                 
                 # Display frame
                 cv2.imshow('Smart Car Hand Control with Auto-Tracking', output_frame)
@@ -678,6 +692,10 @@ class PersonTracker:
                     # Test car connection
                     logger.info("Testing car connection...")
                     self.test_car_connection()
+                elif key == ord('f'):
+                    # Toggle frame flipping
+                    self.flip_frame = not self.flip_frame
+                    logger.info(f"Frame mirroring {'enabled' if self.flip_frame else 'disabled'}")
         
         finally:
             # Ensure car stops when exiting
@@ -704,6 +722,10 @@ class PersonTracker:
                 ret, frame = cap.read()
                 if not ret:
                     break
+                
+                # Flip frame horizontally for mirror effect
+                if self.flip_frame:
+                    frame = cv2.flip(frame, 1)
                 
                 # Process frame
                 processed_frame, tracks, detections = self.process_frame(frame)
@@ -738,9 +760,15 @@ class PersonTracker:
                 
                 # Show control instructions
                 cv2.putText(output_frame, "LEFT HAND = FORWARD | RIGHT HAND = STOP", 
-                           (10, output_frame.shape[0] - 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                cv2.putText(output_frame, "Press 'q' to quit | 'r' to reset", 
-                           (10, output_frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                           (10, output_frame.shape[0] - 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.putText(output_frame, "Press 'q' to quit | 'r' to reset | 'f' to toggle mirror", 
+                           (10, output_frame.shape[0] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                # Show flip status
+                flip_status = f"🔄 MIRROR: {'ON' if self.flip_frame else 'OFF'}"
+                flip_color = (0, 255, 0) if self.flip_frame else (0, 0, 255)
+                cv2.putText(output_frame, flip_status, (10, output_frame.shape[0] - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, flip_color, 2)
                 
                 # Display frame
                 cv2.imshow('Smart Car Hand Control System', output_frame)
@@ -756,6 +784,10 @@ class PersonTracker:
                     self.last_detection_time = None
                     if self.car_connected:
                         self.car_controller.emergency_stop()
+                elif key == ord('f'):
+                    # Toggle frame flipping
+                    self.flip_frame = not self.flip_frame
+                    logger.info(f"Frame mirroring {'enabled' if self.flip_frame else 'disabled'}")
         
         finally:
             # Ensure car stops when exiting
