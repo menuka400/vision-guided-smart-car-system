@@ -191,7 +191,7 @@ class PersonTracker:
         
         # Add tracking parameters
         self.tracking_sensitivity = 50  # Pixels from center to trigger tracking
-        self.tracking_enabled = True
+        self.tracking_enabled = False  # Disable automatic orientation tracking
         self.frame_dimensions = (640, 480)  # Default frame size
         
         # Add frame flipping option
@@ -363,12 +363,9 @@ class PersonTracker:
                     if self.car_connected:
                         self.car_controller.emergency_stop()
             
-            # No person to track, send center command
-            if self.car_connected and self.tracking_enabled:
-                self.car_controller.handle_person_tracking(
-                    person_center=None,
-                    frame_dimensions=self.frame_dimensions
-                )
+            # No person to track, send stop command
+            if self.car_connected:
+                self.car_controller.send_hand_gesture("none")
             
             return frame, [], []
         
@@ -406,11 +403,8 @@ class PersonTracker:
         
         if not detections:
             tracks = self.fairmot_tracker.update(frame, [])
-            if self.car_connected and self.tracking_enabled:
-                self.car_controller.handle_person_tracking(
-                    person_center=None,
-                    frame_dimensions=self.frame_dimensions
-                )
+            if self.car_connected:
+                self.car_controller.send_hand_gesture("none")
             return frame, tracks, detections
         
         # Update FairMOT tracker
@@ -451,11 +445,9 @@ class PersonTracker:
                     tracked_person_found = True
                     self.last_detection_time = current_time
                     
-                    # Send car command with person tracking
-                    if self.car_connected and self.tracking_enabled:
-                        self.car_controller.handle_person_tracking(
-                            person_center=track['center'],
-                            frame_dimensions=self.frame_dimensions,
+                    # Send only hand gesture commands (no automatic tracking)
+                    if self.car_connected:
+                        self.car_controller.handle_raised_hand_detection(
                             has_raised_hand=track['has_raised_hand'],
                             hand_side=track['hand_side']
                         )
@@ -473,44 +465,14 @@ class PersonTracker:
             
             tracks = filtered_tracks
         
-        # If no person is locked and no raised hands detected, handle tracking
-        if not self.person_locked and self.car_connected and self.tracking_enabled:
-            # Find the closest person to center for tracking (even without raised hand)
-            if tracks:
-                frame_center_x = self.frame_dimensions[0] // 2
-                closest_track = min(tracks, key=lambda t: abs(t['center'][0] - frame_center_x))
-                
-                self.car_controller.handle_person_tracking(
-                    person_center=closest_track['center'],
-                    frame_dimensions=self.frame_dimensions,
-                    has_raised_hand=False
-                )
-            else:
-                self.car_controller.handle_person_tracking(
-                    person_center=None,
-                    frame_dimensions=self.frame_dimensions
-                )
+        # If no person is locked, send stop command
+        if not self.person_locked and self.car_connected:
+            self.car_controller.send_hand_gesture("none")
         
         return frame, tracks, detections
     
     def draw_detections(self, frame, tracks):
-        """Enhanced draw_detections with tracking indicators"""
-        # Draw frame center line for tracking reference
-        if self.tracking_enabled:
-            frame_center_x = frame.shape[1] // 2
-            cv2.line(frame, (frame_center_x, 0), (frame_center_x, frame.shape[0]), (255, 255, 255), 1)
-            
-            # Draw tracking zone
-            threshold = self.car_controller.frame_center_threshold if self.car_connected else 50
-            left_bound = frame_center_x - threshold
-            right_bound = frame_center_x + threshold
-            
-            cv2.line(frame, (left_bound, 0), (left_bound, frame.shape[0]), (0, 255, 255), 1)
-            cv2.line(frame, (right_bound, 0), (right_bound, frame.shape[0]), (0, 255, 255), 1)
-            
-            # Add tracking zone label
-            cv2.putText(frame, "TRACKING ZONE", (left_bound, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        """Enhanced draw_detections with hand gesture indicators"""
         
         for track in tracks:
             bbox = track['bbox']
@@ -541,31 +503,6 @@ class PersonTracker:
             
             # Draw person center point
             cv2.circle(frame, person_center, 5, color, -1)
-            
-            # Draw tracking direction indicator
-            if self.tracking_enabled and self.person_locked and track_id == self.tracked_person_id:
-                frame_center_x = frame.shape[1] // 2
-                offset_x = person_center[0] - frame_center_x
-                
-                if abs(offset_x) > (self.car_controller.frame_center_threshold if self.car_connected else 50):
-                    # Draw arrow indicating tracking direction
-                    if offset_x < 0:
-                        # Person is left, car should turn left
-                        arrow_start = (person_center[0] + 30, person_center[1])
-                        arrow_end = (person_center[0] + 60, person_center[1])
-                        cv2.arrowedLine(frame, arrow_start, arrow_end, (255, 0, 255), 3)
-                        cv2.putText(frame, "CAR TURNING LEFT", (x1, y2 + 45), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
-                    else:
-                        # Person is right, car should turn right
-                        arrow_start = (person_center[0] - 30, person_center[1])
-                        arrow_end = (person_center[0] - 60, person_center[1])
-                        cv2.arrowedLine(frame, arrow_start, arrow_end, (255, 0, 255), 3)
-                        cv2.putText(frame, "CAR TURNING RIGHT", (x1, y2 + 45), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
-                else:
-                    cv2.putText(frame, "CENTERED", (x1, y2 + 45), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
             # Draw pose keypoints if available
             if keypoints is not None:
@@ -604,11 +541,10 @@ class PersonTracker:
             logger.error("Cannot open webcam")
             return
         
-        logger.info("Starting enhanced smart car tracking system...")
+        logger.info("Starting smart car hand gesture control system...")
         logger.info("🖐️ LEFT hand = FORWARD | RIGHT hand = STOP")
-        logger.info("🎯 Car will automatically adjust orientation to track person")
         logger.info("🔄 Frame mirroring enabled for natural interaction")
-        logger.info("Press 't' to toggle tracking, 's' to adjust sensitivity, 'f' to toggle mirror")
+        logger.info("Press 'r' to reset, 'f' to toggle mirror")
         
         try:
             while True:
@@ -632,27 +568,16 @@ class PersonTracker:
                 cv2.putText(output_frame, status_text, (10, 30), 
                            cv2.FONT_HERSHEY_SIMPLEX, 1, status_color, 2)
                 
-                # Show car connection and tracking status
+                # Show car connection status
                 car_status = "🚗 CAR CONNECTED" if self.car_connected else "❌ CAR DISCONNECTED"
                 car_color = (0, 255, 0) if self.car_connected else (0, 0, 255)
                 cv2.putText(output_frame, car_status, (10, 70), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, car_color, 2)
                 
-                tracking_status = f"🎯 TRACKING: {'ON' if self.tracking_enabled else 'OFF'}"
-                tracking_color = (0, 255, 0) if self.tracking_enabled else (0, 0, 255)
-                cv2.putText(output_frame, tracking_status, (10, 110), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, tracking_color, 2)
-                
-                # Show tracking sensitivity
-                if self.car_connected:
-                    sensitivity_text = f"Sensitivity: {self.car_controller.frame_center_threshold}px"
-                    cv2.putText(output_frame, sensitivity_text, (10, 150), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                
                 # Show enhanced control instructions
-                cv2.putText(output_frame, "LEFT=FORWARD | RIGHT=STOP | CAR AUTO-TRACKS PERSON", 
+                cv2.putText(output_frame, "LEFT HAND = FORWARD | RIGHT HAND = STOP", 
                            (10, output_frame.shape[0] - 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                cv2.putText(output_frame, "q=quit | r=reset | t=toggle tracking | s=sensitivity | f=flip", 
+                cv2.putText(output_frame, "q=quit | r=reset | f=flip mirror", 
                            (10, output_frame.shape[0] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
                 # Show flip status
@@ -662,7 +587,7 @@ class PersonTracker:
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, flip_color, 2)
                 
                 # Display frame
-                cv2.imshow('Smart Car Hand Control with Auto-Tracking', output_frame)
+                cv2.imshow('Smart Car Hand Gesture Control', output_frame)
                 
                 # Handle key presses
                 key = cv2.waitKey(1) & 0xFF
@@ -675,27 +600,14 @@ class PersonTracker:
                     self.last_detection_time = None
                     if self.car_connected:
                         self.car_controller.emergency_stop()
-                elif key == ord('t'):
-                    # Toggle tracking
-                    self.tracking_enabled = not self.tracking_enabled
-                    if self.car_connected:
-                        self.car_controller.enable_tracking(self.tracking_enabled)
-                    logger.info(f"Person tracking {'enabled' if self.tracking_enabled else 'disabled'}")
-                elif key == ord('s'):
-                    # Adjust sensitivity
-                    if self.car_connected:
-                        current = self.car_controller.frame_center_threshold
-                        new_sensitivity = 30 if current >= 50 else current + 20
-                        self.car_controller.set_tracking_sensitivity(new_sensitivity)
-                        logger.info(f"Tracking sensitivity adjusted to {new_sensitivity} pixels")
-                elif key == ord('c'):
-                    # Test car connection
-                    logger.info("Testing car connection...")
-                    self.test_car_connection()
                 elif key == ord('f'):
                     # Toggle frame flipping
                     self.flip_frame = not self.flip_frame
                     logger.info(f"Frame mirroring {'enabled' if self.flip_frame else 'disabled'}")
+                elif key == ord('c'):
+                    # Test car connection
+                    logger.info("Testing car connection...")
+                    self.test_car_connection()
         
         finally:
             # Ensure car stops when exiting
@@ -809,12 +721,13 @@ def main():
         tracker = PersonTracker(fairmot_model_path, car_ip="192.168.1.112")
         
         # Choose input source
-        print("Smart Car Hand Control System")
+        print("Smart Car Hand Gesture Control System")
         print("=============================")
         print("Control Instructions:")
         print("- Raise LEFT hand: Car moves FORWARD")
         print("- Raise RIGHT hand: Car STOPS")
         print("- No hands raised: Car STOPS")
+        print("- Frame is mirrored for natural interaction")
         print("")
         print("Choose input source:")
         print("1. Webcam")
