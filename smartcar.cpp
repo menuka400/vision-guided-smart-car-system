@@ -1,3 +1,21 @@
+/*
+ * SMART CAR MOTOR DIRECTION CALIBRATION
+ * 
+ * If any motor rotates backwards during the startup test:
+ * 1. Find the motor number from the test output
+ * 2. Set motorDirectionCorrection[motor_number] = -1
+ * 
+ * Example: If FRONT_RIGHT_MOTOR (motor 0) rotates backwards:
+ * Change: int motorDirectionCorrection[4] = {1, 1, 1, 1};
+ * To:     int motorDirectionCorrection[4] = {-1, 1, 1, 1};
+ * 
+ * Motor Numbers:
+ * 0 = FRONT_RIGHT_MOTOR
+ * 1 = BACK_RIGHT_MOTOR  
+ * 2 = FRONT_LEFT_MOTOR
+ * 3 = BACK_LEFT_MOTOR
+ */
+
 #include <Arduino.h>
 #ifdef ESP32
 #include <WiFi.h>
@@ -39,19 +57,29 @@
 #define FORWARD 1
 #define BACKWARD -1
 
+// PWM settings for motor speed control
+#define MAX_SPEED 255
+#define PWM_FREQUENCY 1000
+#define PWM_RESOLUTION 8
+
 struct MOTOR_PINS
 {
   int pinIN1;
   int pinIN2;    
 };
 
+// Updated motor pin configuration
 std::vector<MOTOR_PINS> motorPins = 
 {
-  {14, 12},  // FRONT_RIGHT_MOTOR (Second L298N)
-  {13, 4},   // BACK_RIGHT_MOTOR  (Second L298N)
-  {27, 26},  // FRONT_LEFT_MOTOR  (First L298N)
-  {25, 33},  // BACK_LEFT_MOTOR   (First L298N)
+  {16, 17},  // FRONT_RIGHT_MOTOR
+  {18, 19},  // BACK_RIGHT_MOTOR
+  {27, 26},  // FRONT_LEFT_MOTOR
+  {25, 33},  // BACK_LEFT_MOTOR
 };
+
+// Motor direction correction - set to -1 for motors that are wired backwards
+// Test each motor individually and set -1 for any that rotate backwards
+int motorDirectionCorrection[4] = {-1, 1, 1, 1};  // Motor 0 (FRONT_RIGHT) is reversed
 
 const char* ssid     = "SLT_FIBRE";
 const char* password = "abcd1234";
@@ -154,20 +182,23 @@ const char* htmlHomePage PROGMEM = R"HTMLHOMEPAGE(
 
 void rotateMotor(int motorNumber, int motorDirection)
 {
-  if (motorDirection == FORWARD)
+  // Apply motor direction correction
+  int correctedDirection = motorDirection * motorDirectionCorrection[motorNumber];
+  
+  if (correctedDirection == FORWARD)
   {
-    digitalWrite(motorPins[motorNumber].pinIN1, HIGH);
-    digitalWrite(motorPins[motorNumber].pinIN2, LOW);    
+    ledcWrite(motorNumber * 2, MAX_SPEED);     // pinIN1 at max speed
+    ledcWrite(motorNumber * 2 + 1, 0);        // pinIN2 at 0
   }
-  else if (motorDirection == BACKWARD)
+  else if (correctedDirection == BACKWARD)
   {
-    digitalWrite(motorPins[motorNumber].pinIN1, LOW);
-    digitalWrite(motorPins[motorNumber].pinIN2, HIGH);     
+    ledcWrite(motorNumber * 2, 0);            // pinIN1 at 0
+    ledcWrite(motorNumber * 2 + 1, MAX_SPEED); // pinIN2 at max speed
   }
   else
   {
-    digitalWrite(motorPins[motorNumber].pinIN1, LOW);
-    digitalWrite(motorPins[motorNumber].pinIN2, LOW);       
+    ledcWrite(motorNumber * 2, 0);            // pinIN1 at 0
+    ledcWrite(motorNumber * 2 + 1, 0);        // pinIN2 at 0
   }
 }
 
@@ -398,10 +429,18 @@ void onWebSocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsE
 
 void setUpPinModes()
 {
+  // Configure PWM for all motor pins
   for (int i = 0; i < motorPins.size(); i++)
   {
-    pinMode(motorPins[i].pinIN1, OUTPUT);
-    pinMode(motorPins[i].pinIN2, OUTPUT);  
+    // Configure PWM channels for each motor pin
+    ledcSetup(i * 2, PWM_FREQUENCY, PWM_RESOLUTION);     // Channel for pinIN1
+    ledcSetup(i * 2 + 1, PWM_FREQUENCY, PWM_RESOLUTION); // Channel for pinIN2
+    
+    // Attach pins to PWM channels
+    ledcAttachPin(motorPins[i].pinIN1, i * 2);
+    ledcAttachPin(motorPins[i].pinIN2, i * 2 + 1);
+    
+    // Initialize motors to stop
     rotateMotor(i, STOP);  
   }
 }
@@ -439,10 +478,52 @@ void setup(void)
   server.addHandler(&ws);
   server.begin();
   Serial.println("HTTP server started");
+  
+  // Test motor directions on startup
+  Serial.println("=== MOTOR DIRECTION CALIBRATION ===");
+  Serial.println("Testing motor directions in 3 seconds...");
+  delay(3000);
+  testMotorDirections();
+  
   Serial.println("Smart car is ready for commands!");
 }
 
 void loop() 
 {
   ws.cleanupClients(); 
+}
+
+void testMotorDirections()
+{
+  Serial.println("=== MOTOR DIRECTION TEST ===");
+  Serial.println("Testing each motor individually...");
+  Serial.println("Watch each motor and verify it rotates FORWARD:");
+  
+  for (int i = 0; i < 4; i++)
+  {
+    String motorName;
+    switch(i) {
+      case FRONT_RIGHT_MOTOR: motorName = "FRONT_RIGHT_MOTOR"; break;
+      case BACK_RIGHT_MOTOR: motorName = "BACK_RIGHT_MOTOR"; break;
+      case FRONT_LEFT_MOTOR: motorName = "FRONT_LEFT_MOTOR"; break;
+      case BACK_LEFT_MOTOR: motorName = "BACK_LEFT_MOTOR"; break;
+    }
+    
+    Serial.printf("Testing %s (Motor %d)...\n", motorName.c_str(), i);
+    Serial.println("Motor should rotate FORWARD for 2 seconds");
+    
+    // Run motor forward
+    rotateMotor(i, FORWARD);
+    delay(2000);
+    
+    // Stop motor
+    rotateMotor(i, STOP);
+    Serial.println("Motor stopped");
+    
+    delay(1000); // Pause between tests
+  }
+  
+  Serial.println("=== TEST COMPLETE ===");
+  Serial.println("If any motor rotated backwards, update motorDirectionCorrection array:");
+  Serial.println("Set motorDirectionCorrection[motor_number] = -1 for backwards motors");
 }
