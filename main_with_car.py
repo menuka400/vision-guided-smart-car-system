@@ -6,30 +6,48 @@ import torch
 from ultralytics import YOLO
 import logging
 
-# Import the smart car controller
+# Import the smart car controller and configuration
 from car_controller import SmartCarController
+from config_loader import config
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging from config
+logging.basicConfig(
+    level=getattr(logging, config.get('logging.level', 'INFO')),
+    format=config.get('logging.format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
 logger = logging.getLogger(__name__)
 
 class GestureDetector:
-    def __init__(self, car_ip="192.168.1.112"):
+    def __init__(self, car_ip=None):
         self.yolo_model = None
-        self.frame_dimensions = (640, 480)
         
-        # Initialize smart car controller
-        self.car_controller = SmartCarController(car_ip)
+        # Load configuration
+        self.vision_config = config.get_vision_config()
+        self.car_config = config.get_car_config()
+        self.display_config = config.get_display_config()
+        
+        # Use config for frame dimensions
+        self.frame_dimensions = (
+            self.vision_config['camera']['width'],
+            self.vision_config['camera']['height']
+        )
+        
+        # Initialize smart car controller with config
+        car_ip = car_ip or self.car_config['ip']
+        self.car_controller = SmartCarController(car_ip, self.car_config['port'])
         self.car_connected = False
         
-        # Add frame flipping option
-        self.flip_frame = True  # Enable horizontal flipping by default
+        # Add frame flipping option from config
+        self.flip_frame = self.vision_config['camera']['flip_horizontal']
         
         # Setup models
         self.setup_models()
         
-        # Test car connection
-        self.test_car_connection()
+        # Test car connection if enabled
+        if config.get('system.enable_car_control', True):
+            self.test_car_connection()
+        else:
+            logger.info("Car control disabled in configuration")
         
     def test_car_connection(self):
         """Test connection to the smart car"""
@@ -49,16 +67,17 @@ class GestureDetector:
     def setup_models(self):
         """Download and setup required models"""
         try:
-            # Download YOLO11x-pose model
-            logger.info("Loading YOLO11x-pose model...")
-            self.yolo_model = YOLO('yolo11x-pose.pt')  # This will auto-download if not present
-            logger.info("YOLO11x-pose model loaded successfully")
+            # Download YOLO model from config
+            model_file = self.vision_config['yolo']['model_file']
+            logger.info(f"Loading YOLO model: {model_file}")
+            self.yolo_model = YOLO(model_file)
+            logger.info("YOLO model loaded successfully")
             
         except Exception as e:
             logger.error(f"Error setting up models: {e}")
             raise
     
-    def detect_raised_hand(self, keypoints, confidence_threshold=0.5):
+    def detect_raised_hand(self, keypoints, confidence_threshold=None):
         """
         Detect if person has raised hand (left or right) - Using working logic from main copy.py
         COCO pose keypoints indices:
@@ -66,6 +85,9 @@ class GestureDetector:
         7: left elbow, 8: right elbow
         9: left wrist, 10: right wrist
         """
+        if confidence_threshold is None:
+            confidence_threshold = self.vision_config['hand_detection']['confidence_threshold']
+            
         if keypoints is None or len(keypoints) < 17:
             return False, None
             
@@ -109,6 +131,9 @@ class GestureDetector:
         if keypoints is None:
             return
             
+        # Get display config
+        display_cfg = self.display_config
+            
         # Draw keypoint connections
         connections = [
             (5, 7), (7, 9),   # Left arm
@@ -122,17 +147,17 @@ class GestureDetector:
         
         # Draw bounding box
         x1, y1, x2, y2 = map(int, bbox)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), display_cfg['bbox_color'], display_cfg['bbox_thickness'])
         
         # Draw keypoints and connections
         for connection in connections:
             pt1 = tuple(map(int, keypoints[connection[0]][:2]))
             pt2 = tuple(map(int, keypoints[connection[1]][:2]))
-            cv2.line(frame, pt1, pt2, (0, 255, 0), 2)
+            cv2.line(frame, pt1, pt2, display_cfg['connection_color'], display_cfg['connection_thickness'])
             
         for kp in keypoints:
             x, y = map(int, kp[:2])
-            cv2.circle(frame, (x, y), 4, (255, 0, 0), -1)
+            cv2.circle(frame, (x, y), display_cfg['keypoint_radius'], display_cfg['keypoint_color'], -1)
     
     def process_frame(self, frame):
         """Process a single frame"""
@@ -147,7 +172,7 @@ class GestureDetector:
             frame = cv2.flip(frame, 1)
         
         # Run YOLO pose detection
-        results = self.yolo_model(frame, verbose=False)
+        results = self.yolo_model(frame, verbose=self.vision_config['yolo']['verbose'])
         
         # Process first detected person
         has_raised_hand = False
@@ -162,7 +187,9 @@ class GestureDetector:
                 box = boxes[0]
                 kpts = keypoints[0]
                 
-                if box.conf[0] >= 0.5:  # Confidence threshold
+                # Use person confidence threshold from config
+                person_threshold = self.vision_config['hand_detection']['person_confidence_threshold']
+                if box.conf[0] >= person_threshold:
                     # Get bounding box
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     
@@ -172,13 +199,14 @@ class GestureDetector:
                     # Draw visualization
                     self.draw_pose_keypoints(frame, kpts.data[0], (x1, y1, x2, y2))
                     
-                    # Send commands to car if connected
-                    if self.car_connected:
+                    # Send commands to car if connected and enabled
+                    if self.car_connected and config.get('system.enable_car_control', True):
                         self.car_controller.handle_gesture(has_raised_hand, hand_side)
                     
                     break  # Only process first person
         
-        # Draw status text with movement direction
+        # Draw status text with movement direction using config
+        display_cfg = self.display_config
         if has_raised_hand and hand_side:
             if hand_side == "left":
                 status = "✋ LEFT hand - FORWARD"
@@ -191,7 +219,8 @@ class GestureDetector:
         else:
             status = "No hand gesture - STOPPED"
         
-        cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 
+                   display_cfg['font_scale'], display_cfg['text_color'], display_cfg['font_thickness'])
         
         return frame
     
@@ -230,7 +259,7 @@ class GestureDetector:
         finally:
             # Clean up
             logger.info("Cleaning up...")
-            if self.car_connected:
+            if self.car_connected and config.get('system.emergency_stop_on_exit', True):
                 self.car_controller.emergency_stop()
             cap.release()
             cv2.destroyAllWindows()
@@ -267,7 +296,7 @@ class GestureDetector:
         finally:
             # Clean up
             logger.info("Cleaning up...")
-            if self.car_connected:
+            if self.car_connected and config.get('system.emergency_stop_on_exit', True):
                 self.car_controller.emergency_stop()
             cap.release()
             cv2.destroyAllWindows()
