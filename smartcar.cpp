@@ -515,103 +515,10 @@ void setup(void)
   server.addHandler(&ws);
   server.begin();
   Serial.println("HTTP server started");
-  
-  // Test motor directions on startup
-  Serial.println("=== MOTOR DIRECTION CALIBRATION ===");
-  Serial.println("Testing motor directions in 3 seconds...");
-  delay(3000);
-  testMotorDirections();
-  
-  Serial.println("=== STRAIGHT MOVEMENT CALIBRATION ===");
-  Serial.println("Testing straight movement in 3 seconds...");
-  delay(3000);
-  testStraightMovement();
-  
-  Serial.println("=== BACKWARD MOVEMENT CALIBRATION ===");
-  Serial.println("Testing backward movement in 3 seconds...");
-  delay(3000);
-  testBackwardMovement();
-  
   Serial.println("Smart car is ready for commands!");
 }
 
 void loop() 
 {
   ws.cleanupClients(); 
-}
-
-void testMotorDirections()
-{
-  Serial.println("=== MOTOR DIRECTION TEST ===");
-  Serial.println("Testing each motor individually...");
-  Serial.println("Watch each motor and verify it rotates FORWARD:");
-  
-  for (int i = 0; i < 4; i++)
-  {
-    String motorName;
-    switch(i) {
-      case FRONT_RIGHT_MOTOR: motorName = "FRONT_RIGHT_MOTOR"; break;
-      case BACK_RIGHT_MOTOR: motorName = "BACK_RIGHT_MOTOR"; break;
-      case FRONT_LEFT_MOTOR: motorName = "FRONT_LEFT_MOTOR"; break;
-      case BACK_LEFT_MOTOR: motorName = "BACK_LEFT_MOTOR"; break;
-    }
-    
-    Serial.printf("Testing %s (Motor %d)...\n", motorName.c_str(), i);
-    Serial.println("Motor should rotate FORWARD for 2 seconds");
-    
-    // Run motor forward
-    rotateMotor(i, FORWARD);
-    delay(2000);
-    
-    // Stop motor
-    rotateMotor(i, STOP);
-    Serial.println("Motor stopped");
-    
-    delay(1000); // Pause between tests
-  }
-  
-  Serial.println("=== TEST COMPLETE ===");
-  Serial.println("If any motor rotated backwards, update motorDirectionCorrection array:");
-  Serial.println("Set motorDirectionCorrection[motor_number] = -1 for backwards motors");
-}
-
-void testStraightMovement()
-{
-  Serial.println("=== STRAIGHT MOVEMENT TEST ===");
-  Serial.println("Testing straight forward movement with Motor 2 startup compensation...");
-  Serial.println("Car should move straight forward for 3 seconds");
-  Serial.println("Watch if car turns left or right instead of going straight");
-  
-  // Test straight forward movement with synchronized startup
-  Serial.println("Starting synchronized straight forward movement...");
-  startAllMotorsForward();  // Use synchronized startup with Motor 2 compensation
-  
-  delay(3000);  // Run for 3 seconds
-  
-  // Stop all motors
-  Serial.println("Stopping all motors...");
-  stopAllMotors();  // Use synchronized stop
-  
-  Serial.println("=== STRAIGHT MOVEMENT TEST COMPLETE ===");
-  Serial.println("With Motor 2 compensation: Car should now move straight!");
-  Serial.println("If still turning, adjust the delay in startAllMotorsForward() function");
-}
-
-void testBackwardMovement()
-{
-  Serial.println("=== BACKWARD MOVEMENT TEST ===");
-  Serial.println("Testing backward movement...");
-  Serial.println("Car should move straight backward for 3 seconds");
-  
-  // Test backward movement
-  Serial.println("Starting backward movement...");
-  startAllMotorsBackward();
-  
-  delay(3000);  // Run for 3 seconds
-  
-  // Stop all motors
-  Serial.println("Stopping all motors...");
-  stopAllMotors();
-  
-  Serial.println("=== BACKWARD MOVEMENT TEST COMPLETE ===");
 }
