@@ -79,6 +79,7 @@ std::vector<MOTOR_PINS> motorPins =
 
 // Motor direction correction - set to -1 for motors that are wired backwards
 // Test each motor individually and set -1 for any that rotate backwards
+// For straight movement, adjust based on actual motor behavior
 int motorDirectionCorrection[4] = {-1, 1, 1, 1};  // Motor 0 (FRONT_RIGHT) is reversed
 
 const char* ssid     = "SLT_FIBRE";
@@ -202,23 +203,77 @@ void rotateMotor(int motorNumber, int motorDirection)
   }
 }
 
+void rotateMotorSynchronized(int motorNumber, int motorDirection, bool preStart = false)
+{
+  // Apply motor direction correction
+  int correctedDirection = motorDirection * motorDirectionCorrection[motorNumber];
+  
+  if (correctedDirection == FORWARD)
+  {
+    ledcWrite(motorNumber * 2, MAX_SPEED);     // pinIN1 at max speed
+    ledcWrite(motorNumber * 2 + 1, 0);        // pinIN2 at 0
+  }
+  else if (correctedDirection == BACKWARD)
+  {
+    ledcWrite(motorNumber * 2, 0);            // pinIN1 at 0
+    ledcWrite(motorNumber * 2 + 1, MAX_SPEED); // pinIN2 at max speed
+  }
+  else
+  {
+    ledcWrite(motorNumber * 2, 0);            // pinIN1 at 0
+    ledcWrite(motorNumber * 2 + 1, 0);        // pinIN2 at 0
+  }
+}
+
+void startAllMotorsForward()
+{
+  Serial.println("Starting synchronized forward movement with Motor 2 compensation");
+  
+  // Pre-start Motor 2 (FRONT_LEFT_MOTOR) first to compensate for startup delay
+  rotateMotorSynchronized(FRONT_LEFT_MOTOR, FORWARD, true);
+  delay(50); // 50ms head start for Motor 2
+  
+  // Start all other motors
+  rotateMotorSynchronized(FRONT_RIGHT_MOTOR, FORWARD);
+  rotateMotorSynchronized(BACK_RIGHT_MOTOR, FORWARD);
+  rotateMotorSynchronized(BACK_LEFT_MOTOR, FORWARD);
+  
+  Serial.println("All motors started for forward movement");
+}
+
+void startAllMotorsBackward()
+{
+  Serial.println("Starting synchronized backward movement");
+  
+  // Start all motors in backward direction
+  rotateMotor(FRONT_RIGHT_MOTOR, BACKWARD);
+  rotateMotor(BACK_RIGHT_MOTOR, BACKWARD);
+  rotateMotor(FRONT_LEFT_MOTOR, BACKWARD);
+  rotateMotor(BACK_LEFT_MOTOR, BACKWARD);
+  
+  Serial.println("All motors started for backward movement");
+}
+
+void stopAllMotors()
+{
+  Serial.println("Stopping all motors");
+  rotateMotor(FRONT_RIGHT_MOTOR, STOP);
+  rotateMotor(BACK_RIGHT_MOTOR, STOP);
+  rotateMotor(FRONT_LEFT_MOTOR, STOP);
+  rotateMotor(BACK_LEFT_MOTOR, STOP);
+}
+
 void processCarMovement(String inputValue)
 {
   Serial.printf("Got value as %s %d\n", inputValue.c_str(), inputValue.toInt());  
   switch(inputValue.toInt())
   {
     case UP:
-      rotateMotor(FRONT_RIGHT_MOTOR, FORWARD);
-      rotateMotor(BACK_RIGHT_MOTOR, FORWARD);
-      rotateMotor(FRONT_LEFT_MOTOR, FORWARD);
-      rotateMotor(BACK_LEFT_MOTOR, FORWARD);                  
+      startAllMotorsForward();  // Use synchronized startup for straight movement
       break;
 
     case DOWN:
-      rotateMotor(FRONT_RIGHT_MOTOR, BACKWARD);
-      rotateMotor(BACK_RIGHT_MOTOR, BACKWARD);
-      rotateMotor(FRONT_LEFT_MOTOR, BACKWARD);
-      rotateMotor(BACK_LEFT_MOTOR, BACKWARD);   
+      startAllMotorsBackward();  // Use synchronized backward movement
       break;
 
     case LEFT:
@@ -279,35 +334,23 @@ void processCarMovement(String inputValue)
 
     // Hand gesture controls
     case HAND_LEFT_RAISED:
-      Serial.println("Left hand raised - Moving forward");
-      rotateMotor(FRONT_RIGHT_MOTOR, FORWARD);
-      rotateMotor(BACK_RIGHT_MOTOR, FORWARD);
-      rotateMotor(FRONT_LEFT_MOTOR, FORWARD);
-      rotateMotor(BACK_LEFT_MOTOR, FORWARD);
+      Serial.println("Left hand raised - Moving forward with synchronized startup");
+      startAllMotorsForward();  // Use synchronized startup for hand gesture forward movement
       break;
 
     case HAND_RIGHT_RAISED:
-      Serial.println("Right hand raised - Stopping");
-      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
-      rotateMotor(BACK_RIGHT_MOTOR, STOP);
-      rotateMotor(FRONT_LEFT_MOTOR, STOP);
-      rotateMotor(BACK_LEFT_MOTOR, STOP);
+      Serial.println("Right hand raised - Moving backward");
+      startAllMotorsBackward();  // Use backward movement for right hand
       break;
 
     case HAND_BOTH_RAISED:
       Serial.println("Both hands raised - Stopping");
-      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
-      rotateMotor(BACK_RIGHT_MOTOR, STOP);
-      rotateMotor(FRONT_LEFT_MOTOR, STOP);
-      rotateMotor(BACK_LEFT_MOTOR, STOP);
+      stopAllMotors();  // Use synchronized stop function
       break;
 
     case HAND_NONE_RAISED:
       Serial.println("No hands raised - Stopping");
-      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
-      rotateMotor(BACK_RIGHT_MOTOR, STOP);
-      rotateMotor(FRONT_LEFT_MOTOR, STOP);
-      rotateMotor(BACK_LEFT_MOTOR, STOP);
+      stopAllMotors();  // Use synchronized stop function
       break;
 
     // Add these new cases in the processCarMovement switch statement
@@ -329,18 +372,12 @@ void processCarMovement(String inputValue)
 
     case TRACK_CENTER:
       Serial.println("Target centered - stopping orientation adjustment");
-      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
-      rotateMotor(BACK_RIGHT_MOTOR, STOP);
-      rotateMotor(FRONT_LEFT_MOTOR, STOP);
-      rotateMotor(BACK_LEFT_MOTOR, STOP);
+      stopAllMotors();  // Use synchronized stop function
       break;
 
     case STOP:
     default:
-      rotateMotor(FRONT_RIGHT_MOTOR, STOP);
-      rotateMotor(BACK_RIGHT_MOTOR, STOP);
-      rotateMotor(FRONT_LEFT_MOTOR, STOP);
-      rotateMotor(BACK_LEFT_MOTOR, STOP);    
+      stopAllMotors();  // Use synchronized stop function
       break;
   }
 }
@@ -485,6 +522,16 @@ void setup(void)
   delay(3000);
   testMotorDirections();
   
+  Serial.println("=== STRAIGHT MOVEMENT CALIBRATION ===");
+  Serial.println("Testing straight movement in 3 seconds...");
+  delay(3000);
+  testStraightMovement();
+  
+  Serial.println("=== BACKWARD MOVEMENT CALIBRATION ===");
+  Serial.println("Testing backward movement in 3 seconds...");
+  delay(3000);
+  testBackwardMovement();
+  
   Serial.println("Smart car is ready for commands!");
 }
 
@@ -526,4 +573,45 @@ void testMotorDirections()
   Serial.println("=== TEST COMPLETE ===");
   Serial.println("If any motor rotated backwards, update motorDirectionCorrection array:");
   Serial.println("Set motorDirectionCorrection[motor_number] = -1 for backwards motors");
+}
+
+void testStraightMovement()
+{
+  Serial.println("=== STRAIGHT MOVEMENT TEST ===");
+  Serial.println("Testing straight forward movement with Motor 2 startup compensation...");
+  Serial.println("Car should move straight forward for 3 seconds");
+  Serial.println("Watch if car turns left or right instead of going straight");
+  
+  // Test straight forward movement with synchronized startup
+  Serial.println("Starting synchronized straight forward movement...");
+  startAllMotorsForward();  // Use synchronized startup with Motor 2 compensation
+  
+  delay(3000);  // Run for 3 seconds
+  
+  // Stop all motors
+  Serial.println("Stopping all motors...");
+  stopAllMotors();  // Use synchronized stop
+  
+  Serial.println("=== STRAIGHT MOVEMENT TEST COMPLETE ===");
+  Serial.println("With Motor 2 compensation: Car should now move straight!");
+  Serial.println("If still turning, adjust the delay in startAllMotorsForward() function");
+}
+
+void testBackwardMovement()
+{
+  Serial.println("=== BACKWARD MOVEMENT TEST ===");
+  Serial.println("Testing backward movement...");
+  Serial.println("Car should move straight backward for 3 seconds");
+  
+  // Test backward movement
+  Serial.println("Starting backward movement...");
+  startAllMotorsBackward();
+  
+  delay(3000);  // Run for 3 seconds
+  
+  // Stop all motors
+  Serial.println("Stopping all motors...");
+  stopAllMotors();
+  
+  Serial.println("=== BACKWARD MOVEMENT TEST COMPLETE ===");
 }
