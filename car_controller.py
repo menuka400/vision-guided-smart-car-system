@@ -88,7 +88,7 @@ class SmartCarController:
             return False
             
         # Check if we need to stop
-        is_moving_command = hand_side == "left"
+        is_moving_command = hand_side in ["left", "right"]  # Both hands are now movement commands
         
         # If we were moving and the hand is now down, send immediate stop
         if self.was_moving and (not has_raised_hand or not is_moving_command):
@@ -105,7 +105,7 @@ class SmartCarController:
             self.was_moving = True
             return self.send_hand_gesture("left")
         elif hand_side == "right":
-            self.was_moving = False
+            self.was_moving = True  # Right hand is now also a movement command
             return self.send_hand_gesture("right")
         else:
             self.was_moving = False

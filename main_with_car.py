@@ -178,8 +178,19 @@ class GestureDetector:
                     
                     break  # Only process first person
         
-        # Draw status text
-        status = f"{'✋ ' + hand_side.upper() if has_raised_hand else 'No'} hand gesture"
+        # Draw status text with movement direction
+        if has_raised_hand and hand_side:
+            if hand_side == "left":
+                status = "✋ LEFT hand - FORWARD"
+            elif hand_side == "right":
+                status = "✋ RIGHT hand - BACKWARD"
+            elif hand_side == "both":
+                status = "✋ BOTH hands - STOP"
+            else:
+                status = "✋ Hand detected"
+        else:
+            status = "No hand gesture - STOPPED"
+        
         cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         
         return frame
