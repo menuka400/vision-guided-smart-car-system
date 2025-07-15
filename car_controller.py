@@ -1,31 +1,38 @@
 """
 Simple Smart Car Controller with Hand Gesture Control
-- Responds to hand gestures (left hand = forward, right hand = stop)
-- 2-second cooldown between commands to prevent ESP32 overload
+- Responds to hand gestures (left hand = forward, right hand = backward)
+- Configurable cooldown between commands to prevent ESP32 overload
 - Immediate stop when hand gesture ends
 """
 
 import requests
 import time
 import logging
+from config_loader import config
 
 logger = logging.getLogger(__name__)
 
 class SmartCarController:
-    def __init__(self, car_ip: str = "192.168.1.112", car_port: int = 80):
+    def __init__(self, car_ip: str = None, car_port: int = None):
         """
         Initialize the smart car controller
         
         Args:
-            car_ip: IP address of the smart car
-            car_port: Port number of the smart car web server
+            car_ip: IP address of the smart car (from config if None)
+            car_port: Port number of the smart car web server (from config if None)
         """
-        self.car_ip = car_ip
-        self.car_port = car_port
-        self.base_url = f"http://{car_ip}:{car_port}"
+        # Load configuration
+        car_config = config.get_car_config()
+        controller_config = config.get_controller_config()
+        
+        self.car_ip = car_ip or car_config['ip']
+        self.car_port = car_port or car_config['port']
+        self.base_url = f"http://{self.car_ip}:{self.car_port}"
         self.last_gesture = None
         self.last_command_time = time.time()
-        self.min_command_interval = 2.0  # 2 second cooldown between commands
+        self.min_command_interval = controller_config['min_command_interval']
+        self.connection_timeout = controller_config['connection_timeout']
+        self.request_timeout = controller_config['request_timeout']
         self.command_in_progress = False
         self.was_moving = False  # Track if the car was moving
         
@@ -61,7 +68,7 @@ class SmartCarController:
             url = f"{self.base_url}/hand-gesture"
             data = {"gesture": gesture}
             
-            response = requests.post(url, data=data, timeout=2)
+            response = requests.post(url, data=data, timeout=self.request_timeout)
             
             if response.status_code == 200:
                 logger.info(f"Successfully sent gesture command: {gesture}")
@@ -114,7 +121,7 @@ class SmartCarController:
     def test_connection(self) -> bool:
         """Test connection to the smart car"""
         try:
-            response = requests.get(self.base_url, timeout=5)
+            response = requests.get(self.base_url, timeout=self.connection_timeout)
             if response.status_code == 200:
                 logger.info(f"Successfully connected to smart car at {self.base_url}")
                 return True

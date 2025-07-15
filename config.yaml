@@ -1,0 +1,100 @@
+# Smart Car Vision System Configuration
+
+# WiFi Configuration
+wifi:
+  ssid: "SLT_FIBRE"
+  password: "abcd1234"
+
+# Car Network Configuration
+car:
+  ip: "192.168.1.112"
+  port: 80
+
+# Motor Configuration
+motors:
+  # Motor direction correction: 1 = normal, -1 = reversed
+  direction_correction: [-1, 1, 1, 1]  # [FRONT_RIGHT, BACK_RIGHT, FRONT_LEFT, BACK_LEFT]
+  
+  # PWM settings
+  max_speed: 255
+  pwm_frequency: 1000
+  pwm_resolution: 8
+  
+  # Motor startup compensation (milliseconds)
+  motor2_startup_delay: 50  # Delay for FRONT_LEFT_MOTOR to compensate for slow startup
+
+# Motor Pin Configuration
+motor_pins:
+  front_right:  # Motor 0
+    pin_in1: 16
+    pin_in2: 17
+  back_right:   # Motor 1
+    pin_in1: 18
+    pin_in2: 19
+  front_left:   # Motor 2
+    pin_in1: 27
+    pin_in2: 26
+  back_left:    # Motor 3
+    pin_in1: 25
+    pin_in2: 33
+
+# Vision System Configuration
+vision:
+  # Camera settings
+  camera:
+    width: 640
+    height: 480
+    flip_horizontal: true
+  
+  # Hand detection settings
+  hand_detection:
+    confidence_threshold: 0.5
+    person_confidence_threshold: 0.5
+  
+  # YOLO model settings
+  yolo:
+    model_file: "yolo11x-pose.pt"
+    verbose: false
+
+# Car Controller Settings
+controller:
+  # Command cooldown (seconds)
+  min_command_interval: 2.0
+  
+  # Connection timeout (seconds)
+  connection_timeout: 5
+  
+  # Request timeout (seconds)
+  request_timeout: 2
+
+# Display Settings
+display:
+  # Status text settings
+  font_scale: 1
+  font_thickness: 2
+  text_color: [0, 255, 0]  # Green
+  
+  # Keypoint visualization
+  keypoint_radius: 4
+  keypoint_color: [255, 0, 0]  # Blue
+  connection_color: [0, 255, 0]  # Green
+  connection_thickness: 2
+  
+  # Bounding box
+  bbox_color: [0, 255, 0]  # Green
+  bbox_thickness: 2
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# System Settings
+system:
+  # Enable/disable features
+  enable_motor_tests: false
+  enable_debug_output: true
+  enable_car_control: true
+  
+  # Safety settings
+  emergency_stop_on_exit: true
