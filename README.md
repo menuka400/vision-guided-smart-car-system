@@ -282,7 +282,7 @@ struct MotorPins {
 | 🔄 **Auto-Orientation** | Car adjusts to keep you centered |
 | 🛑 **Emergency Stop** | Instant stop for safety |
 
-*📹 Demo videos coming soon!*
+*📹 [Demo video](https://drive.google.com/file/d/1QEF3sf-H7_6yH42P3HjTYXsAl1LQi4jx/view?usp=sharing)*
 
 </div>
 
